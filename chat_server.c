@@ -314,11 +314,14 @@ void *clientManager(void *arg){
 
     char badName[255];
     FILE *blacklist = fopen("blacklist.txt", "r");
-    while(fgets(badName, 255, blacklist) != NULL) {
-        if(strncmp(badName, client->name, strlen(client->name)) == 0) {
-            close(client->tcp_client_socket);
-            return NULL;
-        } 
+    if(blacklist != NULL) {
+        while(fgets(badName, 255, blacklist) != NULL) {
+            if(strncmp(badName, client->name, strlen(client->name)) == 0) {
+                close(client->tcp_client_socket);
+                fclose(blacklist);
+                return NULL;
+            } 
+        }
     } 
 
     sprintf(buff_out, "%s has joined\n", client->name);

@@ -150,7 +150,7 @@ int conn(struct sockaddr_in tcp_server_address, char *username) {
     else { 
         printf("Successfully connected to server.\n");
         send(tcp_client_socket, username, strlen(username), 0);
-
+        printf("Message sucessfully sent\n");
         // Print first message from server and then reset it
         char tcp_server_response[DATA_SIZE];    
         recv(tcp_client_socket, &tcp_server_response, sizeof(tcp_server_response), 0); 
@@ -185,9 +185,9 @@ int main(int argc, char** argv){
     // Create thread that handles server responses
     pthread_create(&tid, NULL, &handleResponse, NULL);
 
-    char req[BUFFER_SIZE];
 
     while(1) {
+        char req[BUFFER_SIZE];
         while(end == 0) { 
             memset(req, 0, BUFFER_SIZE);
             fgets(req, BUFFER_SIZE, stdin);

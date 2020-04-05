@@ -67,10 +67,12 @@ void loginMenu(){
 	printf("Enter an action: ");
 }
 
-int authenticate(FILE* fp, char* username, char* password) {
+int authenticate(char* filename, char* username, char* password) {
+	FILE* fp = fopen(filename, "r");
 	char line[4086];
 	char* fileUsername;//[USERNAME_SIZE];
 	char* filePassword;//[USERNAME_SIZE];
+	int auth = 0;
 
 	fileUsername = (char*)malloc(USERNAME_SIZE * sizeof(char));
 	filePassword = (char*)malloc(USERNAME_SIZE * sizeof(char));
@@ -78,13 +80,17 @@ int authenticate(FILE* fp, char* username, char* password) {
 	while(fgets(line, 4086, fp) != NULL){
 		fileUsername = strtok(line, ",");
 		if(strcmp(username, fileUsername) == 0){
-            filePassword = strtok(NULL, "\n");
+			auth = 2;
+            		filePassword = strtok(NULL, "\n");
 			if(strcmp(password, filePassword) == 0){
-				return 1;
+				auth = 1;
 			}
 		}
 	}
-	return 0;
+	free(fileUsername);
+	free(filePassword);
+	fclose(fp);
+	return auth;
 }
 
 int main(int argc, char** argv){    
@@ -112,16 +118,21 @@ int main(int argc, char** argv){
 		loginMenu();
 		fgets(choice, 2, stdin);
 		if(strncmp(choice, "1", 1) == 0){
-			lfp = fopen(loginFile, "a");
 			memset(username, 0, USERNAME_SIZE);
 			memset(password, 0, USERNAME_SIZE);
 			printf("Registering\nEnter a username: ");
 			scanf(" %s", username);
 			printf("Enter a password: ");
 			scanf(" %s", password);
-			fprintf(lfp, "%s,%s\n", username, password);
-			fclose(lfp);
-			authenticated = 1;
+			if(authenticate(loginFile, username, password) != 0){
+				printf("User %s already exists, use another username.\n", username);
+			}
+			else{
+				authenticated = 1;
+				lfp = fopen(loginFile, "a");
+				fprintf(lfp, "%s,%s\n", username, password);
+				fclose(lfp);
+			}
 		}
 		else if(strncmp(choice, "2", 1) == 0){
 			memset(username, 0, USERNAME_SIZE);
@@ -130,9 +141,7 @@ int main(int argc, char** argv){
 			scanf(" %s", username);
 			printf("Enter your password: ");
 			scanf(" %s", password);
-			lfp = fopen(loginFile, "r");
-			authenticated = authenticate(lfp, username, password);
-			fclose(lfp);
+			authenticated = authenticate(loginFile, username, password);
 		}
 		else if(strncmp(choice, "0", 1) == 0){
 			printf("EXITING.");
@@ -181,6 +190,7 @@ int main(int argc, char** argv){
 
 	while(end == 0) { 
 		memset(req, 0, BUFFER_SIZE);
+		mainMenu();
 		printf("$ ");
 		fgets(req, BUFFER_SIZE, stdin);
 		send(tcp_client_socket, req, strlen(req), 0);

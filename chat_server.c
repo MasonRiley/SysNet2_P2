@@ -124,24 +124,18 @@ void strip_newline(char *s){
 }
 void handleGlobalMessaging(char *param, char* buffer, Client *client) {
     if(param) {
-        param = strtok(NULL, " ");
-        if(param) {
-            sprintf(buffer, "[PM][%s]", client->name);
-            while (param != NULL) {
-                strcat(buffer, " ");
-                strcat(buffer, param);
-                param = strtok(NULL, " ");
-            }
-            strcat(buffer, "\n");
-            fprintf(gch, "%s", buffer);
-            send_message_all(buffer);
+        sprintf(buffer, "[PM][%s]", client->name);
+        while (param != NULL) {
+            strcat(buffer, " ");
+            strcat(buffer, param);
+            param = strtok(NULL, " ");
         }
-        else {
-            send_message_self("ERROR: Message cannot be null\n", client->tcp_client_socket);
-        }
+        strcat(buffer, "\n");
+        fprintf(gch, "%s", buffer);
+        send_message_all(buffer); 
     } 
     else {
-        send_message_self("ERROR: ID cannot be null\n", client->tcp_client_socket);
+        send_message_self("ERROR: Message cannot be null\n", client->tcp_client_socket);
     }
 }
 
@@ -208,7 +202,7 @@ void *clientManager(void *arg){
 
         printf("Client: %s\n", buff_in);
         /* Special options */
-        if(buff_in[0] == '/') {
+        //if(buff_in[0] == '') {
             char *command, *param;
             command = strtok(buff_in," ");
             if(strcmp(command, "1") == 0) {
@@ -218,27 +212,6 @@ void *clientManager(void *arg){
             else if(strcmp(command, "2") == 0) {
                 param = strtok(NULL, " ");
                 handleGlobalMessaging(param, buff_out, client);
-                /*
-                if(param) {
-                    int id = atoi(param);
-                    param = strtok(NULL, " ");
-                    if(param) {
-                        sprintf(buff_out, "[PM][%s]", client->name);
-                        while (param != NULL) {
-                            strcat(buff_out, " ");
-                            strcat(buff_out, param);
-                            param = strtok(NULL, " ");
-                        }
-                        strcat(buff_out, "\r\n");
-                        send_message_client(buff_out, id);
-                    }
-                    else {
-                        send_message_self("<< message cannot be null\n", client->tcp_client_socket);
-                    }
-                } 
-                else {
-                    send_message_self("<< reference cannot be null\n", client->tcp_client_socket);
-                }*/
             } 
             else if(strcmp(command, "3") == 0) {
                 param = strtok(NULL, " ");
@@ -248,30 +221,6 @@ void *clientManager(void *arg){
                 send_message_self("Goodbye\n", client->tcp_client_socket);
                 break;
             } 
-            /*
-            else if(strcmp(command, "/nick") == 0) {
-                param = strtok(NULL, " ");
-                
-                if(param) {
-                    char *old_name = (char*)malloc(sizeof(client->name) + 1);// = strdup(client->name);
-                    strcpy(old_name, client->name);
-                    
-                    if(!old_name) {
-                        perror("Cannot allocate memory");
-                        continue;
-                    }
-                    
-                    strcpy(client->name, param);
-                    sprintf(buff_out, "<< %s is now known as %s\n", old_name, client->name);
-                    free(old_name);
-                    send_message_all(buff_out);
-                } 
-                else {
-                    send_message_self("<< name cannot be null\n", client->tcp_client_socket);
-                }
-            } */
-            
-            
             else if (strcmp(command, "/help") == 0) {
                 strcat(buff_out, "-=| MAIN MENU |=-\n");
                 strcat(buff_out, "1. View current online number\n");
@@ -290,12 +239,11 @@ void *clientManager(void *arg){
             else {
                 send_message_self("<< unknown command\n", client->tcp_client_socket);
             }
-        } 
-        else {
-            /* Send message */
+        //} 
+        /*else {
             snprintf(buff_out, sizeof(buff_out), "[%s] %s\n", client->name, buff_in);
             send_message(buff_out, client->id);
-        }
+        }*/
     }
 
     /* Close connection */

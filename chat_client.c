@@ -67,44 +67,33 @@ void loginMenu(){
 	printf("Enter an action: ");
 }
 
-int authenticate(FILE* fp, char* username, char* password){
-	printf("Is segfault here?");
+int authenticate(FILE* fp, char* username, char* password) {
 	char line[4086];
-	char* fileUsername = NULL;//[USERNAME_SIZE];
-	char* filePassword = NULL;//[USERNAME_SIZE];
+	char* fileUsername;//[USERNAME_SIZE];
+	char* filePassword;//[USERNAME_SIZE];
 
-	printf("Is segfault here?");
 	fileUsername = (char*)malloc(USERNAME_SIZE * sizeof(char));
 	filePassword = (char*)malloc(USERNAME_SIZE * sizeof(char));
 
-	printf("Is segfault here?");
-	memset(fileUsername, 0, USERNAME_SIZE);
-	memset(filePassword, 0, USERNAME_SIZE);
-	printf("Is segfault here?");
-	while(fgets(line, 4086, fp) != EOF){
+	while(fgets(line, 4086, fp) != NULL){
 		fileUsername = strtok(line, ",");
-		printf("Is segfault here?");
 		if(strcmp(username, fileUsername) == 0){
-			filePassword = strtok(NULL, ",");
-			printf("Is segfault here?");
+            filePassword = strtok(NULL, "\n");
 			if(strcmp(password, filePassword) == 0){
-				free(fileUsername);
-				free(filePassword);
 				return 1;
 			}
 		}
 	}
-	free(fileUsername);
-	free(filePassword);
-	printf("Is segfault here?");
 	return 0;
 }
 
 int main(int argc, char** argv){    
 	char* loginFile;
 	FILE* lfp;
-	char username[USERNAME_SIZE];
-	char password[USERNAME_SIZE];
+	char *username;//[USERNAME_SIZE];
+	char *password;//[USERNAME_SIZE];
+    username = (char*)malloc(USERNAME_SIZE);
+    password = (char*)malloc(USERNAME_SIZE);
 	pthread_t tid;
 
 	if(argc > 1)
@@ -140,9 +129,7 @@ int main(int argc, char** argv){
 			scanf(" %s", username);
 			printf("Enter your password: ");
 			scanf(" %s", password);
-			printf("open file?\n");
 			lfp = fopen(loginFile, "r");
-			printf("open file? please?\n");
 			authenticate(lfp, username, password);
 			fclose(lfp);
 		}

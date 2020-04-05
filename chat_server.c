@@ -1,3 +1,14 @@
+/** 
+ * chat_server.c: This program runs a server which connects to clients.
+ * It creates the socket, accepts client connections, creates a thread, 
+ * receives data, displays the data, and then closes the connection.
+ *
+ * Author(s): Mason Riley, Cesar Santiago
+ * Course: COP4635
+ * Project #: 2 
+ * Last Updated: 4/5/2020
+ */
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

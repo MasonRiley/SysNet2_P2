@@ -100,6 +100,10 @@ void *clientManager(void *arg){
     printf("<< Welcome client #%d\n ", client->id);
     printf(" referenced by %d\n", client->id);
 
+    //Receiving the initial username
+    read(client->tcp_client_socket, buff_in, sizeof(buff_in) -1);
+    strcpy(client->name, buff_in);
+
     sprintf(buff_out, "<< %s has joined\n", client->name);
     send_message_all(buff_out);
     

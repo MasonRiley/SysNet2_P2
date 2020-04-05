@@ -187,7 +187,7 @@ int main(int argc, char** argv){
 	}
 
 	while(end == 0) { 
-		mainMenu();
+		//mainMenu(); stupid
 		memset(req, 0, BUFFER_SIZE);
 		printf("$ ");
 		fgets(req, BUFFER_SIZE, stdin);

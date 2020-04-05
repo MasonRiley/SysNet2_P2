@@ -11,12 +11,11 @@
 #include <signal.h>
 #include "standards.h"
 
-/* Client structure */
 typedef struct {
-    struct sockaddr_in tcp_client_address; //Client's address
-    int tcp_client_socket; //Client's socket
-    int id;                 /* Client unique identifier */
-    char name[32];           /* Client name */
+    struct sockaddr_in tcp_client_address;
+    int tcp_client_socket; 
+    int id;               
+    char name[32];       
 } Client;
 
 int numClients = 0;
@@ -25,24 +24,22 @@ Client *clients[MAX_CLIENT];
 pthread_mutex_t lock;
 FILE *gch;
 
-int getID(char *name) {
-    for(int i = 0; i < MAX_CLIENT; ++i) {
-        if(strcmp(name, clients[i]->name) == 0)
-            return clients[i]->id;
-    }
-}
-
-
 void sendMessage(char *message, char *id, int option, int tcp_client_socket) {
     if(option == SELF) {
         write(tcp_client_socket, message, strlen(message));
     }
     else if(option == PRIVATE) {
-        printf("Might be string fuckery\n");
         pthread_mutex_lock(&lock);
         for (int i = 0; i < MAX_CLIENT; ++i){ 
             if(clients[i] != NULL && strcmp(id, clients[i]->name) == 0) {
-                printf("ID = %s | name = %s\n", id, clients[i]->name);
+                // Add to chat history
+                char *fileName = (char*)malloc(sizeof(clients[i]->name) + sizeof("Log.txt") + 1);
+                strcpy(fileName, clients[i]->name);
+                strcat(fileName, "Log.txt");
+                FILE *pmHistory = fopen(fileName, "a");
+                fprintf(pmHistory, "%s", message);
+                fclose(pmHistory);    
+                // Send message
                 write(clients[i]->tcp_client_socket, message, strlen(message));
             }
         }
@@ -52,6 +49,9 @@ void sendMessage(char *message, char *id, int option, int tcp_client_socket) {
         pthread_mutex_lock(&lock);
         for (int i = 0; i < MAX_CLIENT; ++i){
             if(clients[i] != NULL) {
+                gch = fopen("globalChatHistory.txt", "a");
+                fprintf(gch, "%s", message);
+                fclose(gch);
                 write(clients[i]->tcp_client_socket, message, strlen(message));
             }
         }
@@ -59,62 +59,7 @@ void sendMessage(char *message, char *id, int option, int tcp_client_socket) {
     }
 }
 
-/* Send message to all clients but the sender */
-void send_message(char *s, int id){
-    pthread_mutex_lock(&lock);
-    for (int i = 0; i < MAX_CLIENT; ++i) {
-        if (clients[i]) {
-            if (clients[i]->id != id) {
-                if (write(clients[i]->tcp_client_socket, s, strlen(s)) < 0) {
-                    perror("Write to descriptor failed");
-                    break;
-                }
-            }
-        }
-    }
-    pthread_mutex_unlock(&lock);
-}
-
-/* Send message to all clients */
-void send_message_all(char *s){
-    pthread_mutex_lock(&lock);
-    for (int i = 0; i < MAX_CLIENT; ++i){
-        if (clients[i]) {
-            if (write(clients[i]->tcp_client_socket, s, strlen(s)) < 0) {
-                perror("Write to descriptor failed");
-                break;
-            }
-        }
-    }
-    pthread_mutex_unlock(&lock);
-}
-
-/* Send message to sender */
-void send_message_self(const char *s, int tcp_client_socket){
-    if (write(tcp_client_socket, s, strlen(s)) < 0) {
-        perror("Write to descriptor failed");
-        exit(-1);
-    }
-}
-
-/* Send message to client */
-void send_message_client(char *s, int id){
-    pthread_mutex_lock(&lock);
-    for (int i = 0; i < MAX_CLIENT; ++i){
-        if (clients[i]) { 
-            if (clients[i]->id == id) {
-                if (write(clients[i]->tcp_client_socket, s, strlen(s))<0) {
-                    perror("Write to descriptor failed");
-                    break;
-                }
-            }
-        }
-    }
-    pthread_mutex_unlock(&lock);
-}
-
-/* MAY BE REMOVABLE Strip CRLF */
-void strip_newline(char *s){
+void stripNewline(char *s){
     while (*s != '\0') {
         if (*s == '\r' || *s == '\n') {
             *s = '\0';
@@ -132,10 +77,11 @@ void handleGlobalMessaging(char *param, char* buffer, Client *client) {
         }
         strcat(buffer, "\n");
         fprintf(gch, "%s", buffer);
-        sendMessage(buffer, NULL, GLOBAL, NULL);
+        sendMessage(buffer, NULL, GLOBAL, 0);
     } 
     else {
-        send_message_self("ERROR: Message cannot be null\n", client->tcp_client_socket);
+            strcat(buffer, "ERROR: invalid command\n");
+            sendMessage(buffer, NULL, SELF, client->tcp_client_socket);
     }
 }
 
@@ -152,36 +98,21 @@ void handlePrivateMessaging(char *param, char* buffer, Client *client) {
                 param = strtok(NULL, " ");
             }
             strcat(buffer, "\n");
-            sendMessage(buffer, id, PRIVATE, NULL);
+            sendMessage(buffer, id, PRIVATE, 0);
         }
         else {
-            send_message_self("ERROR: Message cannot be null\n", client->tcp_client_socket);
+            strcat(buffer, "ERROR: invalid command\n");
+            sendMessage(buffer, NULL, SELF, client->tcp_client_socket);
         }
     } 
     else {
-        send_message_self("ERROR: ID cannot be null\n", client->tcp_client_socket);
+        strcat(buffer, "ERROR: invalid command\n");
+        sendMessage(buffer, NULL, SELF, client->tcp_client_socket);
     }
 }
 
-/* Handle all communication with the client */
-void *clientManager(void *arg){
+void printMenu(Client *client) {
     char buff_out[BUFFER_SIZE];
-    char buff_in[BUFFER_SIZE / 2];
-    int rlen;
-
-    numClients++;
-    Client *client = (Client *)arg;
-
-    printf("<< Welcome client #%d\n ", client->id);
-    printf(" referenced by %d\n", client->id);
-
-    //Receiving the initial username
-    read(client->tcp_client_socket, buff_in, sizeof(buff_in) -1);
-    strcpy(client->name, buff_in);
-
-    sprintf(buff_out, "<< %s has joined\n", client->name);
-    send_message_all(buff_out);
-    
     strcat(buff_out, "-=| MAIN MENU |=-\n");
     strcat(buff_out, "1. View current online number\n");
     strcat(buff_out, "2. Enter the group chat\n");
@@ -194,54 +125,255 @@ void *clientManager(void *arg){
     strcat(buff_out, "0. Return to the login screen.\n\n");
     strcat(buff_out, "Enter an action: ");
 
-    send_message_self(buff_out, client->tcp_client_socket);
+    sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+}
 
-    /* Receive input from client */
+void historyManager(Client *client) {
+    char buff_in[BUFFER_SIZE];
+    char buff_out[BUFFER_SIZE];
+    int rlen;
+
+    strcat(buff_out, "1. Group Chat\n");
+    strcat(buff_out, "2. Private Chat\n");
+    strcat(buff_out, "0. Quit\n");
+    sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+
     while ((rlen = read(client->tcp_client_socket, buff_in, sizeof(buff_in) - 1)) > 0) {
         buff_in[rlen] = '\0';
         buff_out[0] = '\0';
-        strip_newline(buff_in);
+        stripNewline(buff_in);
 
-        /* Ignore empty buffer */
+        // Check for empty buffer
         if (!strlen(buff_in)) {
-            printf("Found empty buffer line 193\n");
             continue;
         }
 
-        printf("Client: %s\n", buff_in);
-        /* Special options */
-        //if(buff_in[0] == '') {
-            char *command, *param;
-            command = strtok(buff_in," ");
-            if(strcmp(command, "1") == 0) {
-                sprintf(buff_out, "There are %d client(s) in the chatroom.\n", numClients);
-                send_message_self(buff_out, client->tcp_client_socket);
-            } 
-            else if(strcmp(command, "2") == 0) {
-                param = strtok(NULL, " ");
-                handleGlobalMessaging(param, buff_out, client);
-            } 
-            else if(strcmp(command, "3") == 0) {
-                param = strtok(NULL, " ");
-                handlePrivateMessaging(param, buff_out, client);
+        char *command;
+        command = strtok(buff_in," ");
+        if(strcmp(command, "1") == 0) {
+            FILE *gchIn = fopen("globalChatHistory.txt", "r");
+            if(gchIn == NULL) {
+                strcat(buff_out, "ERROR: History does not exists.\n");
+                sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
             }
-            else if(strcmp(command, "0") == 0) {
-                send_message_self("Goodbye - press any key to exit.\n", client->tcp_client_socket);
-                break;
-            } 
-            else {
-                send_message_self("ERROR: invalid command\n", client->tcp_client_socket);
+            else {        
+                strcat(buff_out, "===========PM HISTORY===========\n");
+                char c;
+                c = fgetc(gchIn);
+                while(c != EOF) {
+                    strncat(buff_out, &c, 1);
+                    c = fgetc(gchIn);
+                }
+                sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+                fclose(gchIn);
             }
+        } 
+        else if(strcmp(command, "2") == 0) {
+            char *fileName = (char*)malloc(sizeof(client->name) + sizeof("Log.txt") + 1);
+            strcpy(fileName, client->name);
+            strcat(fileName, "Log.txt");
+            FILE *pmhIn = fopen(fileName, "r");
+            if(pmhIn == NULL) {
+                strcat(buff_out, "ERROR: History does not exists.\n");
+                sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+            }
+            else {        
+                strcat(buff_out, "===========GLOBAL HISTORY===========\n");
+                char c;
+                c = fgetc(pmhIn);
+                while(c != EOF) {
+                    strncat(buff_out, &c, 1);
+                    c = fgetc(pmhIn);
+                }
+                sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+                fclose(pmhIn);
+            }
+        }
+        else if(strcmp(command, "0") == 0) {
+            printMenu(client);
+            break;
+        }
+    }
+}
+
+void adminManager(Client *client) {
+    char buff_in[BUFFER_SIZE];
+    char buff_out[BUFFER_SIZE];
+    int rlen;
+
+    strcat(buff_out, "1. Ban a member\n");
+    strcat(buff_out, "2. Dismiss a member\n");
+    strcat(buff_out, "3. Kick a member\n");
+    strcat(buff_out, "0. Quit\n");
+    sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+
+    while ((rlen = read(client->tcp_client_socket, buff_in, sizeof(buff_in) - 1)) > 0) {
+        buff_in[rlen] = '\0';
+        buff_out[0] = '\0';
+        stripNewline(buff_in);
+
+        // Check for empty buffer
+        if (!strlen(buff_in)) {
+            continue;
+        }
+
+        char *command;
+        command = strtok(buff_in," ");
+        if(strcmp(command, "1") == 0) {
+            strcat(buff_out, "Enter the ID you want to ban:\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+            
+            read(client->tcp_client_socket, buff_in, sizeof(buff_in) - 1);
+            FILE *blacklist = fopen("blacklist.txt", "a");
+            fprintf(blacklist, "%s", buff_in);
+            fclose(blacklist);
+            
+            for(int i = 0; i < numClients; ++i) {
+                if(strcmp(buff_in, clients[i]->name) == 0) {
+                    close(clients[i]->tcp_client_socket);
+                }
+            }
+
+            buff_out[0] = '\0';
+            strcat(buff_out, "1. Ban a member\n");
+            strcat(buff_out, "2. Dismiss a member\n");
+            strcat(buff_out, "3. Kick a member\n");
+            strcat(buff_out, "0. Quit\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+        }
+        else if(strcmp(command, "2") == 0) { 
+            strcat(buff_out, "Enter the ID you want to dismiss:\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+            
+            read(client->tcp_client_socket, buff_in, sizeof(buff_in) - 1);
+            
+            int i;
+            for(i = 0; i < MAX_CLIENT; ++i) {
+                if(clients[i] != NULL && strncmp(buff_in, clients[i]->name, strlen(clients[i]->name)) == 0) {
+                    close(clients[i]->tcp_client_socket);
+                }
+            }
+
+            buff_out[0] = '\0';
+            strcat(buff_out, "1. Ban a member\n");
+            strcat(buff_out, "2. Dismiss a member\n");
+            strcat(buff_out, "3. Kick a member\n");
+            strcat(buff_out, "0. Quit\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+        }
+        else if(strcmp(command, "3") == 0) { 
+            strcat(buff_out, "Enter the ID you want to kick:\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+            
+            read(client->tcp_client_socket, buff_in, sizeof(buff_in) - 1);
+            
+            int i;
+            for(i = 0; i < MAX_CLIENT; ++i) {
+                if(clients[i] != NULL && strncmp(buff_in, clients[i]->name, strlen(clients[i]->name)) == 0) {
+                    close(clients[i]->tcp_client_socket);
+                }
+            }
+
+            buff_out[0] = '\0';
+            strcat(buff_out, "1. Ban a member\n");
+            strcat(buff_out, "2. Dismiss a member\n");
+            strcat(buff_out, "3. Kick a member\n");
+            strcat(buff_out, "0. Quit\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+        }
+        else if(strcmp(command, "0") == 0) {
+            printMenu(client);
+            break;
+        }
+    }
+}
+
+// Handle all communication with the client 
+void *clientManager(void *arg){
+    char buff_out[BUFFER_SIZE];
+    char buff_in[BUFFER_SIZE / 2];
+    int rlen;
+
+    numClients++;
+    Client *client = (Client *)arg;
+
+    //Receiving the initial username
+    read(client->tcp_client_socket, buff_in, sizeof(buff_in) -1);
+    strcpy(client->name, buff_in);
+
+    char badName[255];
+    FILE *blacklist = fopen("blacklist.txt", "r");
+    while(fgets(badName, 255, blacklist) != NULL) {
+        if(strncmp(badName, client->name, strlen(client->name)) == 0) {
+            close(client->tcp_client_socket);
+            return NULL;
+        } 
+    } 
+
+    sprintf(buff_out, "%s has joined\n", client->name);
+    printf("Welcome %s!\n ", client->name);
+    sendMessage(buff_out, NULL, GLOBAL, 0);
+    
+    printMenu(client);    
+
+    // Receive input from client 
+    while ((rlen = read(client->tcp_client_socket, buff_in, sizeof(buff_in) - 1)) > 0) {
+        buff_in[rlen] = '\0';
+        buff_out[0] = '\0';
+        stripNewline(buff_in);
+
+        // Check for empty buffer
+        if (!strlen(buff_in)) {
+            continue;
+        }
+
+        printf("%s: %s\n", client->name, buff_in);
+
+        char *command, *param;
+        command = strtok(buff_in," ");
+        if(strcmp(command, "1") == 0) {
+            sprintf(buff_out, "There are %d client(s) in the chatroom.\n", numClients);
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+        } 
+        else if(strcmp(command, "2") == 0) {
+            param = strtok(NULL, " ");
+            handleGlobalMessaging(param, buff_out, client);
+        } 
+        else if(strcmp(command, "3") == 0) {
+            param = strtok(NULL, " ");
+            handlePrivateMessaging(param, buff_out, client);
+        }
+        else if(strcmp(command, "4") == 0) {
+            historyManager(client);
+        }
+        else if(strcmp(command, "7") == 0) {
+            strcat(buff_out, "Goodbye - pres any key to exit.\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+            break;
+        }
+        else if(strcmp(command, "8") == 0) {
+            adminManager(client);
+        }
+        else if(strcmp(command, "0") == 0) {
+            strcat(buff_out, "Goodbye - pres any key to exit.\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+            break;
+        }
+        else if(strcmp(command, "~") == 0) {
+           printMenu(client);
+        } 
+        else {
+            strcat(buff_out, "ERROR: invalid command\n");
+            sendMessage(buff_out, NULL, SELF, client->tcp_client_socket);
+        }
     }
 
-    /* Close connection */
-    sprintf(buff_out, "<< %s has left\r\n", client->name);
-
-    send_message_all(buff_out);
+    // Close connection
+    sprintf(buff_out, "%s has left\r\n", client->name);
+    sendMessage(buff_out, NULL, GLOBAL, 0);
     close(client->tcp_client_socket);
    
-    /* Delete client from queue and yield thread */
-    //queue_delete(client->id);
+    // Delete client from queue
     pthread_mutex_lock(&lock);
     for (int i = 0; i < MAX_CLIENT; ++i) {
         if (clients[i]) {
@@ -252,8 +384,6 @@ void *clientManager(void *arg){
         }
     }
     pthread_mutex_unlock(&lock);
-    
-    printf("<< quit ");
     free(client);
     numClients--;
     pthread_detach(pthread_self());
@@ -285,10 +415,6 @@ int main(int argc, char *argv[]) {
     // Listen for simultaneous connections
     listen(tcp_server_socket, MAX_CLIENT);
 
-    // ****TEST AND REMOVEIgnore pipe signals
-    //signal(SIGPIPE, SIG_IGN);
-
-    gch = fopen("globalChatHistory.txt", "w");
 
     pthread_t tid;
     if(pthread_mutex_init(&lock, NULL) != 0) {
@@ -299,27 +425,22 @@ int main(int argc, char *argv[]) {
     printf("-=[ SERVER STARTED ]=-\n");
 
     while (1) {
-        socklen_t clilen = sizeof(tcp_client_address);
-        //tcp_client_socket = accept(tcp_server_socket, (struct sockaddr*)&tcp_client_address, &clilen);
-        tcp_client_socket = accept(tcp_server_socket, &tcp_client_address, &clilen);
-        /* Check if max clients is reached */
-        if ((numClients + 1) == MAX_CLIENT) {
-            printf("<< max clients reached\n");
-            printf("<< reject ");
-            printf("\n");
+        socklen_t len = sizeof(tcp_client_address);
+        tcp_client_socket = accept(tcp_server_socket, &tcp_client_address, &len);
+        
+        if (numClients == MAX_CLIENT) {
+            printf("ERROR: Maximum clients reached\n");
             close(tcp_client_socket);
             continue;
         }
 
-        /* Client settings */
+        // Setup client
         Client *client = (Client *)malloc(sizeof(Client));
         client->tcp_client_address = tcp_client_address;
         client->tcp_client_socket = tcp_client_socket;
         client->id = id++;
-        sprintf(client->name, "%d", client->id);
 
-        /* Add client to the queue and fork thread */
-        //queue_add(cli);
+        // Add client to the queue and create thread
         pthread_mutex_lock(&lock);
         for (int i = 0; i < MAX_CLIENT; ++i) {
             if (!clients[i]) {
@@ -327,12 +448,12 @@ int main(int argc, char *argv[]) {
                 i = MAX_CLIENT;
             }
         }
-        pthread_mutex_unlock(&lock);
-        
+        pthread_mutex_unlock(&lock); 
         pthread_create(&tid, NULL, &clientManager, (void*)client);
-
         sleep(1);
     }
+
+    // Destroy the lock when done
     pthread_mutex_destroy(&lock);
     return 0;
 }

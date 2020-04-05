@@ -25,6 +25,7 @@
 
 int tcp_client_socket; // Socket descriptor      
 int end = 0;
+int run = 0;
 
 pthread_mutex_t lock;
 
@@ -33,30 +34,18 @@ void *handleResponse() {
 
     while(end == 0) {
 	pthread_mutex_lock(&lock);
-	recv(tcp_client_socket, &tcp_server_response, sizeof(tcp_server_response), 0); 
+	int resp = recv(tcp_client_socket, &tcp_server_response, sizeof(tcp_server_response), 0); 
 	pthread_mutex_unlock(&lock);
-	printf("\nServer: %s\n", tcp_server_response);
-	
+	printf("\n%s\n", tcp_server_response);
+    if(resp == 0) {
+        exit(0);
+    }
 	if(strncmp(tcp_server_response, "Goodbye", 7) == 0)
 	    end = -1; 
 	memset(tcp_server_response, 0, sizeof(tcp_server_response));
 
     }
     return NULL;
-}
-
-void mainMenu(){
-	printf("-=| MAIN MENU |=-\n");
-	printf("1. View current online number.\n");
-	printf("2. Enter the group chat.\n");
-	printf("3. Enter the private chat.\n");
-	printf("4. View chat history.\n");
-	printf("5. File transfer.\n");
-	printf("6. Change the password.\n");
-	printf("7. Logout.\n");
-	printf("8. Administrator.\n");
-	printf("0. Return to the login screen.\n\n");
-	printf("Enter an action: ");
 }
 
 void loginMenu(){
@@ -91,27 +80,9 @@ int authenticate(char* filename, char* username, char* password) {
 	return auth;
 }
 
-int main(int argc, char** argv){    
-	char* loginFile;
-	FILE* lfp;
-	char *username;
-	char *password;
+int auth(char *username, char *password, char *loginFile) { 
 	int authenticated = 0;
-    username = (char*)malloc(USERNAME_SIZE);
-    password = (char*)malloc(USERNAME_SIZE);
-	pthread_t tid;
-
-	if(argc > 1)
-		loginFile = argv[1];
-	else
-		loginFile = "loginFile.csv";
-
-	if(pthread_mutex_init(&lock, NULL) != 0) {
-		printf("ERROR: Failed to initialize lock\n");
-		exit(0);
-	}
-
-	do{
+    do{
 		char choice[2];
 		loginMenu();
 		fgets(choice, 2, stdin);
@@ -127,7 +98,7 @@ int main(int argc, char** argv){
 			}
 			else{
 				authenticated = 1;
-				lfp = fopen(loginFile, "a");
+				FILE* lfp = fopen(loginFile, "a");
 				fprintf(lfp, "%s,%s\n", username, password);
 				fclose(lfp);
 			}
@@ -142,61 +113,93 @@ int main(int argc, char** argv){
 			authenticated = authenticate(loginFile, username, password);
 		}
 		else if(strncmp(choice, "0", 1) == 0){
-			printf("EXITING.");
-			return 0;
+			printf("EXITING.\n");
+			exit(0);
 		}
 	}while(authenticated == 0);
+    
+    if(run == 1) {
+        send(tcp_client_socket, "~", sizeof("~"), 0);
+    }
+    return authenticated;
+}
 
-	// Creating the TCP socket
-	tcp_client_socket = socket(AF_INET, SOCK_STREAM, 0);
+int conn(struct sockaddr_in tcp_server_address, char *username) { 
+    run = 1;
+    // Connecting to the remote socket
+    // Creating the TCP socket
+    tcp_client_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-	// Specify address and port of the remote socket
-	struct sockaddr_in tcp_server_address; // Declaring a structure for the address           
+    
+    // Structure Fields' definition: Sets the address family 
+    // of the address the client would connect to    
+    tcp_server_address.sin_family = AF_INET;
 
-	// Structure Fields' definition: Sets the address family 
-	// of the address the client would connect to    
-	tcp_server_address.sin_family = AF_INET;
+    // Specify and pass the port number to connect - converting in right network byte order    
+    tcp_server_address.sin_port = htons(PORT_NUMBER);   
 
-	// Specify and pass the port number to connect - converting in right network byte order    
-	tcp_server_address.sin_port = htons(PORT_NUMBER);   
+    // Connection uses localhost
+    tcp_server_address.sin_addr.s_addr = INADDR_ANY;      
+    int connection_status = connect(tcp_client_socket, 
+        (struct sockaddr *) &tcp_server_address, sizeof(tcp_server_address));        
 
-	// Connection uses localhost
-	tcp_server_address.sin_addr.s_addr = INADDR_ANY;      
+    if (connection_status == -1) {
+        end = -1;        
+        printf("ERROR: Failed to connect to server.\n");     
+    }
+    else { 
+        printf("Successfully connected to server.\n");
+        send(tcp_client_socket, username, strlen(username), 0);
 
-	// Connecting to the remote socket
-	int connection_status = connect(tcp_client_socket, 
-	    (struct sockaddr *) &tcp_server_address, sizeof(tcp_server_address));        
+        // Print first message from server and then reset it
+        char tcp_server_response[DATA_SIZE];    
+        recv(tcp_client_socket, &tcp_server_response, sizeof(tcp_server_response), 0); 
+        printf("\n\n%s \n", tcp_server_response);   
+    }
 
-	char req[BUFFER_SIZE];
+    return 0;
+}
 
-	if (connection_status == -1) {
-		end = -1;        
-		printf("ERROR: Failed to connect to server.\n");     
+int main(int argc, char** argv){    
+	char* loginFile;
+	char *username;
+	char *password;
+    username = (char*)malloc(USERNAME_SIZE);
+    password = (char*)malloc(USERNAME_SIZE);
+	pthread_t tid;
+
+	if(argc > 1)
+		loginFile = argv[1];
+	else
+		loginFile = "loginFile.csv";
+
+	if(pthread_mutex_init(&lock, NULL) != 0) {
+		printf("ERROR: Failed to initialize lock\n");
+		exit(0);
 	}
-	else { 
-	printf("Successfully connected to server.\n");
-	send(tcp_client_socket, username, strlen(username), 0);
 
-	//Print first message from server and then reset it
-	char tcp_server_response[DATA_SIZE];    
-	recv(tcp_client_socket, &tcp_server_response, sizeof(tcp_server_response), 0); 
-	printf("\n\nServer: %s \n", tcp_server_response);   
+    struct sockaddr_in tcp_server_address; // Declaring a structure for the address           
+    auth(username, password, loginFile); 
+    conn(tcp_server_address, username);
+    
+    // Create thread that handles server responses
+    pthread_create(&tid, NULL, &handleResponse, NULL);
 
-	//Create thread that handles server responses
-	pthread_create(&tid, NULL, &handleResponse, NULL);
-	}
+    char req[BUFFER_SIZE];
 
-	while(end == 0) { 
-		//mainMenu(); stupid
-		memset(req, 0, BUFFER_SIZE);
-		printf("$ ");
-		fgets(req, BUFFER_SIZE, stdin);
-		send(tcp_client_socket, req, strlen(req), 0);
-	}
-
-	// Close socket and thread
-	pthread_join(tid, NULL);
-	pthread_mutex_destroy(&lock); 
-	close(tcp_client_socket);    
-	return 0;
+    while(1) {
+        while(end == 0) { 
+            memset(req, 0, BUFFER_SIZE);
+            fgets(req, BUFFER_SIZE, stdin);
+            send(tcp_client_socket, req, strlen(req), 0);
+        }
+        memset(username, '\0', 1); 
+        memset(password, '\0', 1);
+        auth(username, password, loginFile); 
+    }	
+    // Close socket and thread
+    pthread_join(tid, NULL);
+    close(tcp_client_socket);    
+    pthread_mutex_destroy(&lock); 
+    return 0;
 }

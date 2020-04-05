@@ -90,8 +90,9 @@ int authenticate(FILE* fp, char* username, char* password) {
 int main(int argc, char** argv){    
 	char* loginFile;
 	FILE* lfp;
-	char *username;//[USERNAME_SIZE];
-	char *password;//[USERNAME_SIZE];
+	char *username;
+	char *password;
+	int authenticated = 0;
     username = (char*)malloc(USERNAME_SIZE);
     password = (char*)malloc(USERNAME_SIZE);
 	pthread_t tid;
@@ -105,7 +106,7 @@ int main(int argc, char** argv){
 		printf("ERROR: Failed to initialize lock\n");
 		exit(0);
 	}
-	int authenticated = 0;
+
 	do{
 		char choice[2];
 		loginMenu();
@@ -130,14 +131,14 @@ int main(int argc, char** argv){
 			printf("Enter your password: ");
 			scanf(" %s", password);
 			lfp = fopen(loginFile, "r");
-			authenticate(lfp, username, password);
+			authenticated = authenticate(lfp, username, password);
 			fclose(lfp);
 		}
 		else if(strncmp(choice, "0", 1) == 0){
 			printf("EXITING.");
 			return 0;
 		}
-	}while(username == NULL);
+	}while(authenticated == 0);
 
 	// Creating the TCP socket
 	tcp_client_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -167,6 +168,7 @@ int main(int argc, char** argv){
 	}
 	else { 
 	printf("Successfully connected to server.\n");
+	send(tcp_client_socket, username, strlen(username), 0);
 
 	//Print first message from server and then reset it
 	char tcp_server_response[DATA_SIZE];    

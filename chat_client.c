@@ -87,8 +87,6 @@ int authenticate(char* filename, char* username, char* password) {
 			}
 		}
 	}
-	free(fileUsername);
-	free(filePassword);
 	fclose(fp);
 	return auth;
 }
@@ -189,8 +187,8 @@ int main(int argc, char** argv){
 	}
 
 	while(end == 0) { 
-		memset(req, 0, BUFFER_SIZE);
 		mainMenu();
+		memset(req, 0, BUFFER_SIZE);
 		printf("$ ");
 		fgets(req, BUFFER_SIZE, stdin);
 		send(tcp_client_socket, req, strlen(req), 0);
